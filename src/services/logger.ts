@@ -1,12 +1,11 @@
 import { supabase } from './db';
 import pricingData from '../model_pricing.json';
 
-// JSON dosyasındaki fiyatları TypeScript'in anlaması için tiplendiriyoruz
 type PricingMap = Record<string, { input: number; output: number }>;
 const pricing: PricingMap = pricingData;
 
 /**
- * AI isteği ilk başladığında 'pending' (bekliyor) durumunda bir kayıt açar.
+ * Creates a 'pending' log entry when an AI request starts.
  */
 export async function logRequestStart(clientId: string, provider: string, model: string) {
   try {
@@ -22,15 +21,15 @@ export async function logRequestStart(clientId: string, provider: string, model:
       .single();
 
     if (error) throw error;
-    return data.id; // Oluşan log'un ID'sini döndürürüz ki bitince güncelleyebilelim
+    return data.id; 
   } catch (error) {
-    console.error('Log başlatma hatası:', error);
+    console.error('Error starting log:', error);
     return null;
   }
 }
 
 /**
- * AI yanıt verdiğinde, asenkron olarak token ve maliyet bilgilerini günceller.
+ * Asynchronously updates the log with token usage and cost when the AI responds.
  */
 export async function logRequestComplete(
   logId: string, 
@@ -42,19 +41,16 @@ export async function logRequestComplete(
   isSuccess: boolean = true
 ) {
   try {
-    // 1. Maliyeti (Cost) Hesapla
     const modelKey = `${provider}/${model}`;
     const modelPricing = pricing[modelKey];
     let totalCost = 0;
 
     if (modelPricing) {
-      // Fiyatlar genellikle 1000 token başına verilir, bu yüzden 1000'e bölüyoruz
       const inputCost = (inputTokens / 1000) * modelPricing.input;
       const outputCost = (outputTokens / 1000) * modelPricing.output;
       totalCost = inputCost + outputCost;
     }
 
-    // 2. Veritabanındaki 'pending' kaydını güncelle
     const { error } = await supabase
       .from('logs')
       .update({
@@ -70,6 +66,6 @@ export async function logRequestComplete(
     if (error) throw error;
     
   } catch (error) {
-    console.error('Log güncelleme hatası:', error);
+    console.error('Error updating log:', error);
   }
 }
