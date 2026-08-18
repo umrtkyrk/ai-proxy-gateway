@@ -4,8 +4,11 @@ import { authorizeModel } from '../core/modelAuthorization.js';
 import { logDeniedRequest } from '../core/logCapture.js';
 import { runSecurityChain } from '../core/security.js';
 
-export async function openaiRoutes(server: FastifyInstance) {
-  server.post('/v1/openai/chat/completions', async (request, reply) => {
+// Sağlayıcı adı bilerek 'anthropic' — wf-rol "Anthropic uç noktaları" diyor ve
+// Umur'un model_pricing.json anahtarları da `anthropic/...` ile başlıyor.
+// 'claude' göndersek fiyat eşleşmez, maliyet sessizce 0 yazılırdı.
+export async function anthropicRoutes(server: FastifyInstance) {
+  server.post('/v1/anthropic/messages', async (request, reply) => {
     // Güvenlik zinciri: kimlik -> domain -> hız limiti.
     // Üçü de Umur'un middleware'leri; security.ts şu an taklitlerini çalıştırıyor.
     const security = await runSecurityChain({
@@ -23,9 +26,9 @@ export async function openaiRoutes(server: FastifyInstance) {
       return reply.status(400).send({ error: "İstek gövdesinde 'model' alanı zorunludur." });
     }
 
-    const authorization = authorizeModel(clientId, 'openai', requestedModel);
+    const authorization = authorizeModel(clientId, 'anthropic', requestedModel);
     if (!authorization.ok) {
-      void logDeniedRequest(clientId, 'openai', requestedModel, authorization.error);
+      void logDeniedRequest(clientId, 'anthropic', requestedModel, authorization.error);
       return reply.status(authorization.status).send({ error: authorization.error });
     }
 
@@ -33,7 +36,7 @@ export async function openaiRoutes(server: FastifyInstance) {
       body: request.body,
       reply,
       clientId,
-      provider: 'openai',
+      provider: 'anthropic',
       model: requestedModel
     });
   });

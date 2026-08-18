@@ -1,20 +1,21 @@
 import Fastify from 'fastify';
 import { openaiRoutes } from './routes/openai.js';
 import { geminiRoutes } from './routes/gemini.js';
-import { claudeRoutes } from './routes/claude.js';
+import { anthropicRoutes } from './routes/anthropic.js';
 import { isLocalOrigin } from './core/localOrigins.js';
+import { catalogInfo } from './core/modelCatalog.js';
 
 export function buildApp() {
   const server = Fastify({ logger: true });
 
   server.get('/health', async (request) => {
     const origin = request.headers.origin;
-    return { status: 'ok', isLocalOrigin: isLocalOrigin(origin) };
+    return { status: 'ok', isLocalOrigin: isLocalOrigin(origin), modelCatalog: catalogInfo() };
   });
 
   server.register(openaiRoutes);
   server.register(geminiRoutes);
-  server.register(claudeRoutes);
+  server.register(anthropicRoutes);
 
   return server;
 }

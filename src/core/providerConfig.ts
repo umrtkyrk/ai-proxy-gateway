@@ -1,0 +1,63 @@
+// Sağlayıcıya özgü her şey (hedef adres + gerçek API anahtarı başlıkları) tek yerde.
+// wf-ortak §3: "Kontrolden geçen istekler, Provider Adapter katmanlarında ilgili
+// sağlayıcının gerçek API anahtarı eklenerek hedefe iletilir."
+//
+// Anahtar tanımlı değilse istek mock sunucuya gider; böylece gerçek anahtar olmadan
+// geliştirme ve test akışı bozulmaz.
+
+export type ProviderName = 'openai' | 'gemini' | 'anthropic';
+
+const MOCK_BASE_URL = 'http://localhost:4000';
+
+// Anthropic'in zorunlu tuttuğu API sürümü başlığı.
+const ANTHROPIC_VERSION = '2023-06-01';
+
+function baseUrlFor(provider: ProviderName): string {
+  if (provider === 'openai') return process.env.OPENAI_BASE_URL ?? MOCK_BASE_URL;
+  if (provider === 'gemini') return process.env.GEMINI_BASE_URL ?? MOCK_BASE_URL;
+  return process.env.ANTHROPIC_BASE_URL ?? MOCK_BASE_URL;
+}
+
+export interface ProviderTarget {
+  url: string;
+  headers: Record<string, string>;
+}
+
+export function buildProviderTarget(
+  provider: ProviderName,
+  model: string,
+  isStreaming: boolean
+): ProviderTarget {
+  const baseUrl = baseUrlFor(provider);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+  if (provider === 'openai') {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+    return { url: `${baseUrl}/v1/chat/completions`, headers };
+  }
+
+  if (provider === 'anthropic') {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (apiKey) headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = ANTHROPIC_VERSION;
+    return { url: `${baseUrl}/v1/messages`, headers };
+  }
+
+  // Gemini streaming'i gövdedeki bir alanla değil, ayrı bir uç nokta ile ifade eder.
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (apiKey) headers['x-goog-api-key'] = apiKey;
+  const action = isStreaming ? 'streamGenerateContent?alt=sse' : 'generateContent';
+  return { url: `${baseUrl}/v1beta/models/${model}:${action}`, headers };
+}
+
+// Pass-through yaklaşımı gereği gövdeye dokunmuyoruz. Tek istisna Gemini:
+// `stream` alanı gerçek Gemini API'sinde yok, bizim uç nokta seçimimiz için
+// kullanılan bir bayrak. Olduğu gibi iletirsek sağlayıcı bilinmeyen alan diye reddeder.
+export function prepareBodyForProvider(provider: ProviderName, body: unknown): unknown {
+  if (provider !== 'gemini') return body;
+  if (typeof body !== 'object' || body === null) return body;
+
+  const { stream: _stream, ...rest } = body as Record<string, unknown>;
+  return rest;
+}
