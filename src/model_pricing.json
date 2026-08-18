@@ -1,0 +1,14 @@
+{
+  "openai/gpt-4o": {
+    "input": 0.005,
+    "output": 0.015
+  },
+  "gemini/gemini-1.5-pro": {
+    "input": 0.0035,
+    "output": 0.0105
+  },
+  "anthropic/claude-3-5-sonnet": {
+    "input": 0.003,
+    "output": 0.015
+  }
+}
