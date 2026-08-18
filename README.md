@@ -387,14 +387,47 @@ edildi (bkz. bölüm 7 ölçümleri).
 
 ---
 
-## 13. Bilinen sınırlar
+## 13. Canlı ortam doğrulaması
+
+Sistem gerçek Vercel altyapısında yayına alınıp test edildi. Gerçek sağlayıcı anahtarı
+bulunmadığı için, sahte sağlayıcı da ayrı bir Vercel projesi olarak yayınlandı; böylece
+zincirin tamamı canlı ortamda ölçüldü:
+
+```
+Client → proxy (Vercel) → sahte sağlayıcı (Vercel)
+```
+
+**Ölçüm sonuçları:**
+
+| Test | Sonuç |
+|---|---|
+| `/health` | 200 |
+| Normal istek (3 sağlayıcı) | 200 — 0.50s / 0.67s / 1.42s |
+| Kimlik doğrulama (anahtar yok) | 401 |
+| Domain kontrolü (origin yok / yetkisiz domain) | 403 / 403 |
+| Model kontrolü (yetkisiz / eksik) | 400 / 400 |
+| **Anthropic streaming** | 10 parça, 1.04 s'ye yayılmış, ortalama 115 ms aralık |
+| **OpenAI streaming** | 9 parça, 1.04 s'ye yayılmış, ortalama 130 ms aralık |
+| **Gemini streaming** | 9 parça, 1.04 s'ye yayılmış, ortalama 130 ms aralık |
+| UTF-8 bütünlüğü (canlı zincir) | `şğü Türkçe` bozulmadan geçti |
+
+**Kritik bulgu:** Vercel serverless fonksiyonları SSE yanıtlarını **tamponlamıyor.**
+Parçaların 115-130 ms aralıklarla gelmesi, sahte sağlayıcının parçalar arasına koyduğu
+150 ms gecikmeyi yansıtıyor — yani akış uçtan uca gerçek zamanlı aktarılıyor. Bu, zincirde
+iki ayrı serverless fonksiyon bulunmasına rağmen geçerli.
+
+Bu doğrulama önemliydi çünkü `api/index.ts` içindeki desen (`app.server.emit('request', ...)`)
+handler'ın promise'ini yanıt tamamlanmadan çözüyor; Vercel'in fonksiyonu erken sonlandırıp
+akışı kesme riski vardı. Kesmiyor.
+
+---
+
+## 14. Bilinen sınırlar
 
 - **Gerçek sağlayıcıya hiç bağlanılmadı.** Tüm testler mock sunucu üzerinden yapıldı.
   Mock, sağlayıcıların gerçek yanıt şemalarına (usage alanlarının konumu dahil) uygun
   yazıldı, ancak gerçek API'lerde farklılık çıkabilir.
-- **Vercel'de production kanıtı yok.** `vercel dev` ile streaming'in kesilmediği
-  doğrulandı (12 parça, 120 ms aralıklarla, doğrudan Fastify ile birebir aynı), ancak
-  bu yerel bir emülasyondur; gerçek Vercel altyapısında doğrulanması gerekir.
+- **Birim test yok** (aşağıda ayrıca belirtilmiştir).
 - **Birim test yok.** Doğrulama, mock sunucu üzerinden uçtan uca HTTP testleriyle
   yapıldı. CI ve birim testleri B tarafının kapsamında.
 - **Token sayıları `0` ile "bilinmiyor" ayrışmıyor.** Log servisinin imzası zorunlu
