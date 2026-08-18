@@ -11,6 +11,8 @@
 // Çağıran taraf (route'lar) hiç değişmeyecek. Zincirin SIRASI ve dönen HTTP
 // kodları bu dosyada belirleniyor; bağlama işi A tarafına ait.
 
+import { isLocalOrigin } from './localOrigins.js';
+
 const STUBS_ACTIVE = true;
 
 // --- 1) Kimlik doğrulama — Umur: authMiddleware.verifyClient -----------------
@@ -54,10 +56,12 @@ function checkDomainWhitelist(
     };
   }
 
+  // Yerel geliştirme porttan bağımsız kabul edilir (wf-ortak §4).
+  // Kontrol A tarafının localOrigins.ts yardımcısına devredildi; mantık tek yerde dursun.
+  if (isLocalOrigin(originHeader)) return { success: true as const };
+
   try {
     const hostname = new URL(originHeader).hostname;
-    // Yerel geliştirme porttan bağımsız kabul edilir (wf-ortak §4).
-    if (hostname === 'localhost' || hostname === '127.0.0.1') return { success: true as const };
 
     const isAllowed = allowedDomains.some((d) => hostname === d || hostname.endsWith(`.${d}`));
     return isAllowed
