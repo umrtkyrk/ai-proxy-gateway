@@ -12,10 +12,17 @@ const MOCK_BASE_URL = 'http://localhost:4000';
 // Anthropic'in zorunlu tuttuğu API sürümü başlığı.
 const ANTHROPIC_VERSION = '2023-06-01';
 
+// .env dosyalarında değişkenler sık sık `NAME=` şeklinde boş bırakılır. Boş metin
+// `??` için geçerli bir değer olduğundan, tanımsız saymak için ayrıca kontrol ediyoruz.
+function envOrUndefined(name: string): string | undefined {
+  const value = process.env[name];
+  return value && value.trim() !== '' ? value.trim() : undefined;
+}
+
 function baseUrlFor(provider: ProviderName): string {
-  if (provider === 'openai') return process.env.OPENAI_BASE_URL ?? MOCK_BASE_URL;
-  if (provider === 'gemini') return process.env.GEMINI_BASE_URL ?? MOCK_BASE_URL;
-  return process.env.ANTHROPIC_BASE_URL ?? MOCK_BASE_URL;
+  if (provider === 'openai') return envOrUndefined('OPENAI_BASE_URL') ?? MOCK_BASE_URL;
+  if (provider === 'gemini') return envOrUndefined('GEMINI_BASE_URL') ?? MOCK_BASE_URL;
+  return envOrUndefined('ANTHROPIC_BASE_URL') ?? MOCK_BASE_URL;
 }
 
 export interface ProviderTarget {
@@ -32,20 +39,20 @@ export function buildProviderTarget(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
   if (provider === 'openai') {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = envOrUndefined('OPENAI_API_KEY');
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
     return { url: `${baseUrl}/v1/chat/completions`, headers };
   }
 
   if (provider === 'anthropic') {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = envOrUndefined('ANTHROPIC_API_KEY');
     if (apiKey) headers['x-api-key'] = apiKey;
     headers['anthropic-version'] = ANTHROPIC_VERSION;
     return { url: `${baseUrl}/v1/messages`, headers };
   }
 
   // Gemini streaming'i gövdedeki bir alanla değil, ayrı bir uç nokta ile ifade eder.
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = envOrUndefined('GEMINI_API_KEY');
   if (apiKey) headers['x-goog-api-key'] = apiKey;
   const action = isStreaming ? 'streamGenerateContent?alt=sse' : 'generateContent';
   return { url: `${baseUrl}/v1beta/models/${model}:${action}`, headers };
