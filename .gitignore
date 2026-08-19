@@ -141,5 +141,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
-node_modules/
-.env
+.vercel
+.DS_Store
+vercel-log.txt
