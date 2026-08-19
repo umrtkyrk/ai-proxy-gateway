@@ -1,0 +1,43 @@
+import type { FastifyInstance } from 'fastify';
+import { forwardToProvider } from '../core/proxyForward.js';
+import { authorizeModel } from '../core/modelAuthorization.js';
+import { logDeniedRequest } from '../core/logCapture.js';
+import { runSecurityChain } from '../core/security.js';
+
+export async function geminiRoutes(server: FastifyInstance) {
+  server.post('/v1/gemini/models/:model', async (request, reply) => {
+    // Güvenlik zinciri: kimlik -> domain -> hız limiti.
+    // Üçü de Umur'un middleware'leri; security.ts şu an taklitlerini çalıştırıyor.
+    const security = await runSecurityChain({
+      apiKey: (request.headers.authorization ?? '').replace(/^Bearer\s+/i, ''),
+      origin: request.headers.origin ?? request.headers.referer ?? null
+    });
+    if (!security.ok) {
+      return reply.status(security.status).send({ error: security.error });
+    }
+    const clientId = security.clientId;
+
+    // Gemini'nin kendi uç noktası `models/{model}:generateContent` biçiminde.
+    // Client orijinal formatı taklit ederse eylem ekini ayırıp saf model adını alıyoruz.
+    const modelParam = (request.params as { model: string }).model;
+    const requestedModel = modelParam.split(':')[0];
+    if (!requestedModel) {
+      return reply.status(400).send({ error: 'Model adı belirtilmedi.' });
+    }
+
+    const authorization = authorizeModel(clientId, 'gemini', requestedModel);
+    if (!authorization.ok) {
+      void logDeniedRequest(clientId, 'gemini', requestedModel, authorization.error);
+      return reply.status(authorization.status).send({ error: authorization.error });
+    }
+
+    // Hedef URL artık istenen modelle kuruluyor (önceden gemini-pro'ya sabitlenmişti).
+    await forwardToProvider({
+      body: request.body,
+      reply,
+      clientId,
+      provider: 'gemini',
+      model: requestedModel
+    });
+  });
+}
