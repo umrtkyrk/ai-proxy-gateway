@@ -16,7 +16,7 @@ export async function createNewClient(name: string, environment: string) {
     const { data: clientData, error: clientError } = await supabase
       .from('clients')
       .insert([{ name: name }])
-      .select('id')
+      .select('id, name, is_active, client_type, allowed_domains, allowed_models')
       .single();
 
     if (clientError) throw new Error(`Error creating client: ${clientError.message}`);

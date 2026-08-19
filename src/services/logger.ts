@@ -31,7 +31,7 @@ export async function logRequestStart(clientId: string, provider: string, model:
 /**
  * Asynchronously updates the log with token usage and cost when the AI responds.
  */
-export async function logRequestComplete(
+export async export async function logRequestComplete(
   logId: string, 
   provider: string, 
   model: string, 
