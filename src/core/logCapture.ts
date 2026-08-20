@@ -1,29 +1,20 @@
-// GEÇİCİ: Umur'un src/services/logger.ts servisi bağlanana kadar yakaladığımız
-// bilgiyi console'a yazıyoruz.
+// B tarafının log servisine açılan katman.
 //
-// Fonksiyon imzaları bilerek onun servisiyle birebir aynı tutuldu:
-//   logRequestStart(clientId, provider, model) -> logId
-//   logRequestComplete(logId, provider, model, inputTokens, outputTokens, latencyMs, isSuccess)
-// Birleşmede sadece bu dosyanın içi değişecek; çağıran taraf (proxyForward.ts) aynı kalacak.
-//
-// İki bilinen uyumsuzluk (Umur'a iletilecek):
-//   1. Onun imzasında inputTokens/outputTokens zorunlu `number`. Streaming'de sağlayıcı
-//      usage göndermeyebiliyor; o durumda 0 geçiyoruz, ham değer burada görünür kalıyor.
-//   2. `errorMessage` için `logs` tablosunda kolon yok. 8. parametre olarak taşıyoruz;
-//      kolon açılmazsa birleşmede düşecek.
+// Umur'un logRequestComplete imzası errorMessage almıyor; logs tablosuna
+// error_message kolonu eklendi ama fonksiyon henüz onu yazmıyor. Sebep metnini
+// burada tutuyoruz ve doğrudan kolona yazıyoruz — imzası genişletildiğinde bu
+// ek güncelleme kalkacak.
 
 import type { ProviderName } from './providerConfig.js';
-
-let nextLocalLogId = 1;
+import * as logger from '../services/logger.js';
+import { supabase } from '../services/db.js';
 
 export async function logRequestStart(
   clientId: string,
   provider: ProviderName,
   model: string
 ): Promise<string | null> {
-  const logId = `local-${nextLocalLogId++}`;
-  console.log('[LOG:start]', JSON.stringify({ logId, clientId, provider, model, status: 'pending' }));
-  return logId;
+  return logger.logRequestStart(clientId, provider, model);
 }
 
 export async function logRequestComplete(
@@ -36,24 +27,14 @@ export async function logRequestComplete(
   isSuccess: boolean = true,
   errorMessage?: string
 ): Promise<void> {
-  console.log(
-    '[LOG:complete]',
-    JSON.stringify({
-      logId,
-      provider,
-      model,
-      status: isSuccess ? 'success' : 'error',
-      inputTokens,
-      outputTokens,
-      latencyMs,
-      errorMessage
-    })
-  );
+  await logger.logRequestComplete(logId, provider, model, inputTokens, outputTokens, latencyMs, isSuccess);
+  if (errorMessage) {
+    await supabase.from('logs').update({ error_message: errorMessage }).eq('id', logId);
+  }
 }
 
-// Sağlayıcıya hiç gitmeden reddedilen istekler de kayda geçsin (mission: "All AI
-// requests made through the Proxy should be logged"). Umur'un iki fazlı API'si
-// üzerine kurulu, böylece birleşmede ayrıca uyarlama gerekmiyor.
+// Sağlayıcıya hiç gitmeden reddedilen istekler de kayda geçsin
+// (görev tanımı: "All AI requests made through the Proxy should be logged").
 export async function logDeniedRequest(
   clientId: string,
   provider: ProviderName,

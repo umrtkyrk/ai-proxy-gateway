@@ -1,30 +1,28 @@
 // Model erişim kontrolü iki katmanlı çalışır:
 //
-//   1. KATALOG  — Model sistemde tanımlı mı? Kaynağı Umur'un model_pricing.json'u.
+//   1. KATALOG  — Model sistemde tanımlı mı? Kaynağı model_pricing.json.
 //                 Fiyatı olmayan model hiç geçmez; aksi halde maliyet sessizce 0 yazılır.
-//   2. YETKİ    — BU client BU modeli kullanabilir mi? Client bazında açık liste.
+//   2. YETKİ    — BU client BU modeli kullanabilir mi? Kaynağı clients.allowed_models.
 //
 // İkisinin ayrı olması önemli: katalogdaki her modeli herkese açsaydık bu fiilen
 // wildcard erişim olurdu, wf-ortak §4 bunu açıkça yasaklıyor ("wildcard (*) erişimi
 // kullanılmaz; böylece yeni ve pahalı modellere kontrolsüz erişim engellenir").
+//
+// allowed_models biçimi: "provider/model" (örn. "anthropic/claude-3-5-sonnet").
+// model_pricing.json anahtarlarıyla aynı düzen — aynı model adı iki sağlayıcıda
+// bulunabileceği için yalnız model adı belirsiz kalırdı.
 
-import { isKnownModel } from './modelCatalog.js';
+import { isKnownModel, modelKey } from './modelCatalog.js';
 import type { ProviderName } from './providerConfig.js';
-
-// GEÇİCİ: Umur'un şemasına client bazında izinli model tablosu eklendiğinde
-// bu sabitin yerini bir veritabanı sorgusu alacak. Fonksiyonun dışarıya verdiği
-// cevap aynı kalacak, sadece içindeki kaynak değişecek.
-// Model isimleri bilerek model_pricing.json'daki isimlerle aynı.
-const MOCK_CLIENT_MODEL_ACCESS: Record<string, string[]> = {
-  'demo-client': ['openai/gpt-4o', 'gemini/gemini-1.5-pro', 'anthropic/claude-3-5-sonnet']
-};
 
 export type AuthorizationResult = { ok: true } | { ok: false; status: number; error: string };
 
+// Yetki listesi parametre olarak alınıyor: güvenlik zinciri client kaydını zaten
+// okuduğu için ikinci bir veritabanı turu gerekmiyor.
 export function authorizeModel(
-  clientId: string,
   provider: ProviderName,
-  model: string
+  model: string,
+  allowedModels: string[]
 ): AuthorizationResult {
   if (!isKnownModel(provider, model)) {
     return {
@@ -34,8 +32,7 @@ export function authorizeModel(
     };
   }
 
-  const allowedModels = MOCK_CLIENT_MODEL_ACCESS[clientId] ?? [];
-  if (!allowedModels.includes(`${provider}/${model}`)) {
+  if (!allowedModels.includes(modelKey(provider, model))) {
     return {
       ok: false,
       status: 403,

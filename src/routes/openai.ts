@@ -16,6 +16,7 @@ export async function openaiRoutes(server: FastifyInstance) {
       return reply.status(security.status).send({ error: security.error });
     }
     const clientId = security.clientId;
+    const allowedModels = security.allowedModels;
 
     const body = request.body as { model?: string } | undefined;
     const requestedModel = body?.model;
@@ -23,7 +24,7 @@ export async function openaiRoutes(server: FastifyInstance) {
       return reply.status(400).send({ error: "İstek gövdesinde 'model' alanı zorunludur." });
     }
 
-    const authorization = authorizeModel(clientId, 'openai', requestedModel);
+    const authorization = authorizeModel('openai', requestedModel, allowedModels);
     if (!authorization.ok) {
       void logDeniedRequest(clientId, 'openai', requestedModel, authorization.error);
       return reply.status(authorization.status).send({ error: authorization.error });
