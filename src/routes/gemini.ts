@@ -16,6 +16,7 @@ export async function geminiRoutes(server: FastifyInstance) {
       return reply.status(security.status).send({ error: security.error });
     }
     const clientId = security.clientId;
+    const allowedModels = security.allowedModels;
 
     // Gemini'nin kendi uç noktası `models/{model}:generateContent` biçiminde.
     // Client orijinal formatı taklit ederse eylem ekini ayırıp saf model adını alıyoruz.
@@ -25,7 +26,7 @@ export async function geminiRoutes(server: FastifyInstance) {
       return reply.status(400).send({ error: 'Model adı belirtilmedi.' });
     }
 
-    const authorization = authorizeModel(clientId, 'gemini', requestedModel);
+    const authorization = authorizeModel('gemini', requestedModel, allowedModels);
     if (!authorization.ok) {
       void logDeniedRequest(clientId, 'gemini', requestedModel, authorization.error);
       return reply.status(authorization.status).send({ error: authorization.error });

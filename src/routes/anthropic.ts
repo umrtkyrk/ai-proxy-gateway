@@ -19,6 +19,7 @@ export async function anthropicRoutes(server: FastifyInstance) {
       return reply.status(security.status).send({ error: security.error });
     }
     const clientId = security.clientId;
+    const allowedModels = security.allowedModels;
 
     const body = request.body as { model?: string } | undefined;
     const requestedModel = body?.model;
@@ -26,7 +27,7 @@ export async function anthropicRoutes(server: FastifyInstance) {
       return reply.status(400).send({ error: "İstek gövdesinde 'model' alanı zorunludur." });
     }
 
-    const authorization = authorizeModel(clientId, 'anthropic', requestedModel);
+    const authorization = authorizeModel('anthropic', requestedModel, allowedModels);
     if (!authorization.ok) {
       void logDeniedRequest(clientId, 'anthropic', requestedModel, authorization.error);
       return reply.status(authorization.status).send({ error: authorization.error });

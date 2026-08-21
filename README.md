@@ -291,27 +291,50 @@ OPENAI_BASE_URL=         ANTHROPIC_BASE_URL=       GEMINI_BASE_URL=
 `*_BASE_URL` boş bırakılırsa istekler mock sunucuya gider. Böylece gerçek anahtar
 olmadan tüm akış test edilebilir.
 
+### Test client'ı ve anahtarı oluşturma
+
+Kimlik doğrulama gerçek veritabanına karşı çalıştığı için, isteklerde `client_keys`
+tablosunda karşılığı bulunan bir anahtar gerekir. Yeni bir client ve anahtar üretmek için
+`createNewClient(name, environment)` çağrılır; ürettiği `sk-proxy-...` anahtarı yalnızca
+o an gösterilir (veritabanında SHA-256 özeti saklanır).
+
+Client'ın hangi modelleri kullanabileceği `clients.allowed_models` kolonunda tanımlanır:
+
+```sql
+update clients
+set allowed_models = array['openai/gpt-4o', 'anthropic/claude-3-5-sonnet'],
+    client_type    = 'browser-based',
+    allowed_domains = array['company.com']
+where name = 'Test - Ayselin';
+```
+
+Anahtarı `.env` dosyasına yazıp örneklerde kullanabilirsiniz:
+
+```
+TEST_PROXY_KEY=sk-proxy-...
+```
+
 ### Örnek istekler
 
 ```bash
 # Normal istek
 curl -X POST http://localhost:3000/v1/openai/chat/completions \
   -H 'content-type: application/json' \
-  -H 'authorization: Bearer sk-proxy-testkey' \
+  -H "authorization: Bearer $TEST_PROXY_KEY" \
   -H 'origin: http://localhost:5173' \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"selam"}]}'
 
 # Streaming
 curl -N -X POST http://localhost:3000/v1/anthropic/messages \
   -H 'content-type: application/json' \
-  -H 'authorization: Bearer sk-proxy-testkey' \
+  -H "authorization: Bearer $TEST_PROXY_KEY" \
   -H 'origin: http://localhost:5173' \
   -d '{"model":"claude-3-5-sonnet","stream":true,"messages":[{"role":"user","content":"selam"}]}'
 
 # Gemini
 curl -X POST http://localhost:3000/v1/gemini/models/gemini-1.5-pro \
   -H 'content-type: application/json' \
-  -H 'authorization: Bearer sk-proxy-testkey' \
+  -H "authorization: Bearer $TEST_PROXY_KEY" \
   -H 'origin: http://localhost:5173' \
   -d '{"contents":[{"role":"user","parts":[{"text":"selam"}]}]}'
 ```
@@ -330,37 +353,39 @@ Mock sunucu, mutlu yol dışındaki durumları da üretebilir. Gövdeye `_mock` 
 ```bash
 curl -N -X POST http://localhost:3000/v1/anthropic/messages \
   -H 'content-type: application/json' \
-  -H 'authorization: Bearer sk-proxy-testkey' \
+  -H "authorization: Bearer $TEST_PROXY_KEY" \
   -H 'origin: http://localhost:5173' \
   -d '{"model":"claude-3-5-sonnet","stream":true,"_mock":"utf8_split","messages":[]}'
 ```
 
 ---
 
-## 10. ⚠️ Henüz tamamlanmamış kısımlar
+## 10. Bileşenlerin gerçeklik durumu
 
-Bu bölüm bilinçli olarak açık tutulmuştur — kod okunurken yanlış varsayım yapılmaması için.
+Sistemin tamamı gerçek servislere bağlıdır; aşağıdaki tablo hangi verinin nereden
+geldiğini gösterir.
 
-| Bileşen | Durum | Tamamlayacak taraf |
+| Bileşen | Kaynak |
+|---|---|
+| Kimlik doğrulama | `client_keys` tablosu — anahtar SHA-256'lanıp karşılaştırılır |
+| Domain kontrolü | `clients.client_type` + `clients.allowed_domains` |
+| Hız limiti | Upstash Redis — `INCR` + `TTL` |
+| Model yetkilendirme | `clients.allowed_models` (biçim: `provider/model`) |
+| Model kataloğu | `model_pricing.json` |
+| Loglama + maliyet | `logs` tablosu — `cost` ve `error_message` dahil |
+
+**Geçici çözümler** — B tarafındaki düzeltmeler beklendiği için fazladan iş yapılıyor,
+davranış doğru ancak sadeleştirilebilir:
+
+| Konu | Şu anki çözüm | Beklenen düzeltme |
 |---|---|---|
-| `core/security.ts` içindeki üç fonksiyon | **Taklit.** İmzaları B tarafının middleware'leriyle birebir aynı; gövdeleri geçici | B (kod hazır, bağlanacak) |
-| `modelAuthorization.ts` client yetki listesi | **Mock.** İzinli modelleri tutan tablo şemada yok | B (şema) |
-| `logCapture.ts` | **Console'a yazıyor.** Gerçek servise bağlantı test edildi ve çalışıyor | B (bağlanacak) |
-| Rate limiting | Bağlı değil — Upstash bilgileri yok | B |
-| Domain whitelist verileri | `clients.client_type` ve `allowed_domains` kolonları eklendi, ancak `verifyClient` bunları henüz `SELECT` etmiyor | B |
-| `logs.error_message` | Kolon yok; yakalanan hata sebepleri kaydedilemiyor | B |
-| Prompt kaydı | Kolon yok; karar verilmedi | A + B |
-| Gerçek sağlayıcı bağlantısı | Hiç denenmedi — API anahtarı sağlanmadı | Şirket |
-| Vercel Preview Deployments | Kurulamadı — repo ayarlarına erişim yetkisi yok | B (yetki) |
+| `verifyClient` yalnızca `(id, name, is_active)` seçiyor | `client_type`, `allowed_domains`, `allowed_models` için ek bir sorgu yapılıyor | Select genişletilirse istek başına bir veritabanı turu azalır |
+| `logRequestComplete` hata metni almıyor | `logs.error_message` ayrı bir `update` ile yazılıyor | İmzaya `errorMessage` parametresi eklenmesi |
+| Client bazlı hız limiti yok | Tüm client'lar için sabit 60 istek/dakika | `clients` tablosuna dakika/saat/gün limit kolonları |
+| Token limiti yok | Yalnızca istek sayısı sınırlanıyor | Harcanan token'ları biriktiren ikinci bir sayaç |
 
-Sunucu, taklit fonksiyonlar etkinken her açılışta uyarı basar:
-
-```
-[UYARI] Güvenlik zinciri TAKLİT fonksiyonlarla çalışıyor (src/core/security.ts).
-Gerçek kimlik doğrulama, domain ve rate limit kontrolü YOK. Canlıya alınmamalı.
-```
-
----
+**Henüz yapılmamış:** prompt kaydı (kolon yok, karar verilmedi) ve gerçek sağlayıcıya
+bağlantı (API anahtarı sağlanmadı; tüm testler sahte sağlayıcı üzerinden yapıldı).
 
 ## 11. Seam yaklaşımı
 
@@ -369,7 +394,9 @@ noktalar **seam** olarak kuruldu: dışa verdikleri arayüz nihai haliyle aynı,
 geçici. Birleşmede yalnızca ilgili dosyanın **içi** değişir; çağıran taraf hiç değişmez.
 
 Seam'ler: `logCapture.ts` (log servisi), `security.ts` (üç middleware),
-`modelAuthorization.ts` (yetki listesi kaynağı).
+`modelAuthorization.ts` (yetki listesi kaynağı). Üçü de gerçek servislere bağlandı;
+bağlama işlemi çağıran tarafta (route'lar, `proxyForward.ts`) hiçbir değişiklik
+gerektirmedi — seam yaklaşımının amacı buydu.
 
 Uyumluluk merge beklenmeden doğrulandı: karşı tarafın imzaları `origin/main`'den
 çıkarılıp yerel bir vekil modüle yazıldı, çağrı noktaları ona bağlanıp derleme
