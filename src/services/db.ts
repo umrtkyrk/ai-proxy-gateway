@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { generateProxyKey, hashApiKey } from '../utils/auth';
+import { generateProxyKey, hashApiKey } from '../utils/auth.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || '';
