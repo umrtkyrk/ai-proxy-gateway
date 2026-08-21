@@ -1,5 +1,5 @@
 import { supabase } from './db.js';
-import pricingData from '../model_pricing.json';
+import pricingData from '../model_pricing.json' with { type: 'json' };
 
 type PricingMap = Record<string, { input: number; output: number }>;
 const pricing: PricingMap = pricingData;
