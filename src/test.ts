@@ -1,8 +1,8 @@
-import { createNewClient } from './services/db';
-import { verifyClient } from './middleware/authMiddleware';
-import { checkRateLimit } from './middleware/rateLimiter';
-import { checkDomainWhitelist } from './middleware/domainWhitelister';
-import { logRequestStart, logRequestComplete } from './services/logger';
+import { createNewClient } from './services/db.js';
+import { verifyClient } from './middleware/authMiddleware.js';
+import { checkRateLimit } from './middleware/rateLimiter.js';
+import { checkDomainWhitelist } from './middleware/domainWhitelister.js';
+import { logRequestStart, logRequestComplete } from './services/logger.js';
 
 async function runTests() {
   console.log('⏳ Starting Supabase Database and Security Test...\n');
