@@ -1,5 +1,5 @@
-import { supabase } from '../services/db';
-import { hashApiKey } from '../utils/auth';
+import { supabase } from '../services/db.js';
+import { hashApiKey } from '../utils/auth.js';
 
 /**
  * Verifies the provided Proxy API key.
@@ -22,7 +22,10 @@ export async function verifyClient(providedApiKey: string) {
         clients (
           id,
           name,
-          is_active
+          is_active,
+          client_type,
+          allowed_domains,
+          allowed_models
         )
       `)
       .eq('key_hash', hashedKey)
@@ -44,7 +47,10 @@ export async function verifyClient(providedApiKey: string) {
       client: {
         id: clientDetails.id,
         name: clientDetails.name,
-        environment: keyData.environment
+        environment: keyData.environment,
+        client_type: clientDetails.client_type,
+        allowed_domains: clientDetails.allowed_domains,
+        allowed_models: clientDetails.allowed_models
       }
     };
 

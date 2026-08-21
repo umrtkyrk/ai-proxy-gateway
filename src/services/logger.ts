@@ -1,4 +1,4 @@
-import { supabase } from './db';
+import { supabase } from './db.js';
 import pricingData from '../model_pricing.json';
 
 type PricingMap = Record<string, { input: number; output: number }>;
@@ -31,21 +31,23 @@ export async function logRequestStart(clientId: string, provider: string, model:
 /**
  * Asynchronously updates the log with token usage and cost when the AI responds.
  */
-export async export async function logRequestComplete(
+export async function logRequestComplete(
   logId: string, 
   provider: string, 
   model: string, 
-  inputTokens: number, 
-  outputTokens: number, 
+  inputTokens: number | null, 
+  outputTokens: number | null, 
   latencyMs: number,
-  isSuccess: boolean = true
+  isSuccess: boolean = true,
+  error_message?: string
 ) {
   try {
     const modelKey = `${provider}/${model}`;
     const modelPricing = pricing[modelKey];
     let totalCost = 0;
 
-    if (modelPricing) {
+    // Token'lar null değilse maliyet hesapla
+    if (modelPricing && inputTokens !== null && outputTokens !== null) {
       const inputCost = (inputTokens / 1000) * modelPricing.input;
       const outputCost = (outputTokens / 1000) * modelPricing.output;
       totalCost = inputCost + outputCost;
@@ -59,7 +61,8 @@ export async export async function logRequestComplete(
         output_tokens: outputTokens,
         cost: totalCost,
         latency_ms: latencyMs,
-        completed_at: new Date().toISOString()
+        completed_at: new Date().toISOString(),
+        error_message: error_message || null
       })
       .eq('id', logId);
 
